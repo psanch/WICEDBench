@@ -1,0 +1,2 @@
+NAME := App_WICEDBench_
+$(NAME)_SOURCES := hw_aes_cbc.c
