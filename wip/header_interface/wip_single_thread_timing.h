@@ -24,7 +24,7 @@ WICEDBench.header_interface-CYW943907AEVAL1F download run
 
 //trial constants
 #define NUM_CASES 1
-#define NUM_LOOPS 1
+#define NUM_LOOPS 100
 
 //message constants
 #define DATA_LENGTH_BYTES 256
@@ -32,9 +32,11 @@ WICEDBench.header_interface-CYW943907AEVAL1F download run
 
 //RSA constants
 #define RSA_EXPONENT 3
+#define RSA_MESSAGE "gFXA5gFyqpM8XsprT7DstTMvbRJfKwM8h0PwTDZcHdL4Ii9z8LPer4sNbUxFMG9SujvFb6AgEu0NxVzlVNdenZrh8UHjmBtujD3KraxooKaagAAP3JHWlOzSZFYpQ5vc"
+#define RSA_DATA_LENGTH_BYTES 128
 
 //AES constants
-#define AES_KEY_LENGTH 192 //[128, 192, 256] if altered, change Hex key in sec struct
+#define AES_KEY_LENGTH 128 //[128, 192, 256] if altered, change Hex key in sec struct
 #define AES_IV_LENGTH 16
 
 //trial structure
@@ -58,17 +60,17 @@ uint32_t num_cycles_enc, num_cycles_dec; //arrays to hold time/cycles per trial
 //Security protocol prototypes
 
 //public key
-void rsa(void);
+void rsa(uint32_t num_trials);
 
 //symmetric key
     //software
-void sw_aes_cbc(void);
-void sw_aes_ctr(void); //functionality uncertain
+void sw_aes_cbc(uint32_t num_trials);
+void sw_aes_ctr(uint32_t num_trials); //functionality uncertain
 
 
     //hardware
-void hw_aes_cbc(void);
-void hw_aes_ctr(void); //functionality uncertain
+void hw_aes_cbc(uint32_t num_trials);
+void hw_aes_ctr(uint32_t num_trials); //functionality uncertain
 
 
 //clock cycle -> time functions
@@ -125,7 +127,7 @@ typedef enum
 
 */
 
-void rsa(void)
+void rsa(uint32_t num_trials)
 {
     rsa_context ctx;
     uint32_t i,j;
@@ -136,13 +138,13 @@ void rsa(void)
             .num = 1,
             .label = "Test Case RSA (software)",
             .hex_plain_text = { 0 },
-            .char_plain_text = MESSAGE_PT,
-            .data_len = DATA_LENGTH_BYTES,
+            .char_plain_text = RSA_MESSAGE,
+            .data_len = RSA_DATA_LENGTH_BYTES,
 
         }
     };
 
-    uint32_t keysize_bits = DATA_LENGTH_BYTES*8;
+    uint32_t keysize_bits = RSA_DATA_LENGTH_BYTES*8;
     uint32_t exponent = RSA_EXPONENT;
     num_cycles_enc = num_cycles_dec = 0;
     //uint32_t crypt_code;
@@ -154,10 +156,10 @@ void rsa(void)
     //Initialize RSA context and pass RNG function
     rsa_init(&ctx, RSA_PKCS_V15, RSA_RAW, microrng_rand, &state );
     uint32_t error_code = rsa_gen_key( &ctx, keysize_bits, exponent );
-    WPRINT_APP_INFO(("err code: %u\n", (unsigned int)error_code));
+    //WPRINT_APP_INFO(("err code: %u\n", (unsigned int)error_code));
 
     char *plain_text_ptr = rsa_test_cases[0].char_plain_text;
-    for(i = 0, num_cycles_enc = 0, num_cycles_dec = 0; i < NUM_CASES; i++){
+    for(i = 0; i < num_trials; i++, num_cycles_enc = 0, num_cycles_dec = 0){
         for (j = 0; j < NUM_LOOPS; j++){
 
             //count clock cycles of encryption
@@ -180,15 +182,15 @@ void rsa(void)
             //WPRINT_APP_INFO(("dec err code: %u\n", (unsigned int)crypt_code));
             //dump_bytes(plain_text, DATA_LENGTH_BYTES, 1);
         }
-        WPRINT_APP_INFO(("Avg encrypt time: %.8f\n", get_average_time_mcs(num_cycles_enc)/NUM_LOOPS));
-        WPRINT_APP_INFO(("Avg decrypt time: %.8f\n", get_average_time_mcs(num_cycles_dec)/NUM_LOOPS));
+        WPRINT_APP_INFO(("%.8f\n", get_average_time_mcs(num_cycles_enc)/NUM_LOOPS));
+        //WPRINT_APP_INFO(("Avg decrypt time: %.8f\n", get_average_time_mcs(num_cycles_dec)/NUM_LOOPS));
     }
 
     //output data
 
 }
 
-void sw_aes_cbc(void){
+void sw_aes_cbc(uint32_t num_trials){
 
     aes_context_t context_aes;
     uint32_t i,j;
@@ -200,7 +202,7 @@ void sw_aes_cbc(void){
                 .hex_key = {
                         0x06, 0xa9, 0x21, 0x40, 0x36, 0xb8, 0xa1, 0x5b,
                         0x51, 0x2e, 0x03, 0xd5, 0x34, 0x12, 0x00, 0x06,
-                        0x2e, 0x6f, 0x93, 0xd5, 0x43, 0x11, 0xa3, 0x09, //uncomment for AES-192 & AES-256
+                        //0x2e, 0x6f, 0x93, 0xd5, 0x43, 0x11, 0xa3, 0x09, //uncomment for AES-192 & AES-256
                         //0x41, 0x3b, 0xd3, 0xd8, 0x84, 0x18, 0x10, 0x7e, //uncomment for AES-256 ONLY
 
                     },
@@ -218,17 +220,18 @@ void sw_aes_cbc(void){
 
     uint8_t iv[AES_IV_LENGTH];
     char *plain_text_ptr;
+    num_cycles_enc = num_cycles_dec = 0;
 
-    for(i = 0, num_cycles_enc = 0, num_cycles_dec = 0; i < NUM_CASES; i++){
+    for(i = 0; i < num_trials; i++, num_cycles_enc = 0, num_cycles_dec = 0){
         for (j = 0; j < NUM_LOOPS; j++){
 
             /* Test encryption */
             //WPRINT_APP_INFO( ( "\n%s\n", aes_ctr_test_cases[i].label ) );
-            memcpy(iv, aes_cbc_cases[i].iv, AES_IV_LENGTH);
+            memcpy(iv, aes_cbc_cases[0].iv, AES_IV_LENGTH);
             memset(&context_aes, 0, sizeof(context_aes));
-            aes_setkey_enc(&context_aes, aes_cbc_cases[i].hex_key, AES_KEY_LENGTH);
+            aes_setkey_enc(&context_aes, aes_cbc_cases[0].hex_key, AES_KEY_LENGTH);
 
-            plain_text_ptr = aes_cbc_cases[i].char_plain_text;
+            plain_text_ptr = aes_cbc_cases[0].char_plain_text;
 
             /*
             WPRINT_APP_INFO( ( "\nPlain text: " ) );
@@ -239,7 +242,7 @@ void sw_aes_cbc(void){
 
             //wiced_time_get_time( &t1 );
             a_time = host_platform_get_cycle_count();
-            aes_crypt_cbc(&context_aes, AES_ENCRYPT, aes_cbc_cases[i].data_len, iv, (unsigned char *)plain_text_ptr, cipher_text);
+            aes_crypt_cbc(&context_aes, AES_ENCRYPT, aes_cbc_cases[0].data_len, iv, (unsigned char *)plain_text_ptr, cipher_text);
             b_time = host_platform_get_cycle_count();
             //wiced_time_get_time( &t2 );
             num_cycles_enc += b_time - a_time;
@@ -253,25 +256,25 @@ void sw_aes_cbc(void){
 
             // Test decryption
             //WPRINT_APP_INFO( ( "\nResulting Decrypted ASCII Text:" ) );
-            memcpy(iv, aes_cbc_cases[i].iv, AES_IV_LENGTH);
+            memcpy(iv, aes_cbc_cases[0].iv, AES_IV_LENGTH);
             memset(&context_aes, 0, sizeof(context_aes));
 
-            aes_setkey_dec(&context_aes, aes_cbc_cases[i].hex_key, AES_KEY_LENGTH);
+            aes_setkey_dec(&context_aes, aes_cbc_cases[0].hex_key, AES_KEY_LENGTH);
             a_time = host_platform_get_cycle_count();
-            aes_crypt_cbc(&context_aes, AES_DECRYPT, aes_cbc_cases[i].data_len, iv, (unsigned char*)cipher_text, plain_text );
+            aes_crypt_cbc(&context_aes, AES_DECRYPT, aes_cbc_cases[0].data_len, iv, (unsigned char*)cipher_text, plain_text );
             b_time = host_platform_get_cycle_count();
             num_cycles_dec += b_time - a_time;
 
             //dump_bytes(plain_text, aes_cbc_cases[i].data_len, 1);
 
         }
-            WPRINT_APP_INFO(("%.8f\n", get_average_time_mcs(num_cycles_enc)));
+            WPRINT_APP_INFO(("%.8f\n", get_average_time_mcs(num_cycles_enc)/1000));
            //WPRINT_APP_INFO( ( "Time for AES-CBC encrypt = %u ms\n", (unsigned int) t2 ) );
     }
 
 }
 
-void hw_aes_cbc(void){
+void hw_aes_cbc(uint32_t num_trials){
 
     platform_hwcrypto_init();
 
@@ -285,7 +288,7 @@ void hw_aes_cbc(void){
             .hex_key = {
                     0x06, 0xa9, 0x21, 0x40, 0x36, 0xb8, 0xa1, 0x5b,
                     0x51, 0x2e, 0x03, 0xd5, 0x34, 0x12, 0x00, 0x06,
-                    0x2e, 0x6f, 0x93, 0xd5, 0x43, 0x11, 0xa3, 0x09, //uncomment line for AES-192
+                    //0x2e, 0x6f, 0x93, 0xd5, 0x43, 0x11, 0xa3, 0x09, //uncomment line for AES-192
                     //0x41, 0x3b, 0xd3, 0xd8, 0x84, 0x18, 0x10, 0x7e, //uncomment line for AES-256
                 },
             .iv = {
@@ -303,7 +306,7 @@ void hw_aes_cbc(void){
     uint8_t iv[AES_IV_LENGTH];
     char *plain_text_ptr;
 
-    for(i = 0, num_cycles_enc = 0, num_cycles_dec = 0; i < NUM_CASES; i++){
+    for(i = 0, num_cycles_enc = 0, num_cycles_dec = 0; i < num_trials; i++){
         for (j = 0; j < NUM_LOOPS; j++){
 
             /* Test encryption */
@@ -321,19 +324,19 @@ void hw_aes_cbc(void){
             WPRINT_APP_INFO( ( "\"\n" ) );
             */
 
-            //wiced_time_get_time( &t1 );
+            wiced_time_get_time( &a_time );
 
-            a_time = host_platform_get_cycle_count();
+            //a_time = host_platform_get_cycle_count();
             hw_aes_crypt_cbc(&context_aes, HW_AES_ENCRYPT, aes_cbc_cases[i].data_len, iv, (const unsigned char*)plain_text_ptr, cipher_text);
-            b_time = host_platform_get_cycle_count();
+            //b_time = host_platform_get_cycle_count();
 
 
-            //wiced_time_get_time( &t2 );
+            wiced_time_get_time( &b_time );
             num_cycles_enc += b_time - a_time;
             //t2 = t2 - t1;
 
             //WPRINT_APP_INFO( ( "\nResulting Cipher Text:" ) );
-            dump_bytes( cipher_text, aes_cbc_cases[i].data_len, 0);
+            //dump_bytes( cipher_text, aes_cbc_cases[i].data_len, 0);
 
             //Test decryption
             //WPRINT_APP_INFO( ( "\nResulting Decrypted ASCII Text:" ) );
@@ -341,16 +344,21 @@ void hw_aes_cbc(void){
             memset(&context_aes, 0, sizeof(context_aes));
 
             hw_aes_setkey_dec(&context_aes, aes_cbc_cases[i].hex_key, AES_KEY_LENGTH);
-            a_time = host_platform_get_cycle_count();
+            //a_time = host_platform_get_cycle_count();
+            wiced_time_get_time( &a_time );
             hw_aes_crypt_cbc(&context_aes, HW_AES_DECRYPT, aes_cbc_cases[i].data_len, iv, cipher_text, plain_text );
-            b_time = host_platform_get_cycle_count();
+            wiced_time_get_time( &b_time );
+            //b_time = host_platform_get_cycle_count();
 
             num_cycles_dec += b_time - a_time;
 
-            dump_bytes(plain_text, aes_cbc_cases[i].data_len, 1);
+            //dump_bytes(plain_text, aes_cbc_cases[i].data_len, 1);
         }
-            //WPRINT_APP_INFO( ( "Time for AES-CBC encrypt = %u ms\n", (unsigned int) t2 ) );
-            WPRINT_APP_INFO(("\n%.8f\n", get_average_time_mcs((float)num_cycles_enc)));
+            //using cycles
+            //WPRINT_APP_INFO(("%.8f\n", get_average_time_mcs((float)num_cycles_enc)/1000));
+
+            //using get_time
+            WPRINT_APP_INFO(("%.8f\n", ((float)(num_cycles_enc) ) / ( (float)NUM_LOOPS )) );
     }
 }
 #endif
